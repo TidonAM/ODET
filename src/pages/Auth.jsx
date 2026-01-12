@@ -20,7 +20,7 @@ export default function Auth() {
 	};
 
 	return (
-		<div className="row flex flex-center">
+		<div className="row flex flex-center w-full">
 			<div className="col-6 form-widget">
 				<h1 className="header">Supabase + React</h1>
 				<p className="description">
