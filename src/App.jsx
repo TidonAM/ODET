@@ -1,5 +1,4 @@
 import React from "react";
-import { Provider } from "./components/ui/provider";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { DataProvider } from "./contexts/DataProvider";
@@ -7,8 +6,7 @@ import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth"; // Ensure this path is correct
-import { Flex, Spacer } from "@chakra-ui/react";
-import { Stack, Box } from "@chakra-ui/react";
+import { Flex, Spinner, Center, Stack, Text } from "@chakra-ui/react";
 
 // This internal component handles the "Logged In vs Logged Out" view
 const MainLayout = () => {
@@ -16,34 +14,36 @@ const MainLayout = () => {
 
   if (loading) {
     return (
-      <Provider>
-        <Flex>
-          <div className="flex h-screen items-center justify-center bg-gray-100">
-            <div className="text-xl font-semibold text-blue-600 animate-pulse">
-              Loading Angel's UDIT...
-            </div>
-          </div>
+      <Center h="100vh" bg="gray.100">
+        <Flex direction="column" align="center" gap={4}>
+          <Spinner size="xl" color="blue.600" />
+          <Text
+            fontSize="xl"
+            fontWeight="semibold"
+            color="blue.600"
+            animation="pulse"
+          >
+            Loading Angel's ODET...
+          </Text>
         </Flex>
-      </Provider>
+      </Center>
     );
   }
 
   return (
-    <Provider>
-      <Stack>
-        {!session ? (
-          <Auth />
-        ) : (
-          <>
-            <Navbar />
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </>
-        )}
-      </Stack>
-    </Provider>
+    <Stack minH="100vh">
+      {!session ? (
+        <Auth />
+      ) : (
+        <>
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </>
+      )}
+    </Stack>
   );
 };
 

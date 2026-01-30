@@ -24,10 +24,18 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #f3f4f6; /* Light gray background for dashboard */
+  color: #1f2937; /* Dark gray text */
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex; /* Use flex column so the footer pushes down if needed */
+  flex-direction: column;
 }
 
 h1 {
@@ -65,4 +73,9 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+#home-page-content {
+  padding-left: 16px;
+  padding-right: 16px;
 }

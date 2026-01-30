@@ -1,234 +1,553 @@
 import React, { useState, useEffect } from "react";
+import {
+  Box,
+  Container,
+  Heading,
+  SimpleGrid,
+  Text,
+  Input,
+  Button,
+  Flex,
+  Stack,
+  Badge,
+  Separator,
+  IconButton,
+  HStack,
+} from "@chakra-ui/react";
+import {
+  IoTrashOutline,
+  IoPencilOutline,
+  IoCheckmarkOutline,
+  IoCloseOutline,
+} from "react-icons/io5";
 import { useData } from "../contexts/DataContext";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 
-// --- Sub-component for Adding Categories/Accounts ---
+// --- Sub-component for Adding Items ---
 const SettingsForm = ({ type, onSubmit }) => {
-	const [title, setTitle] = useState("");
-	const [color, setColor] = useState(
-		type === "category" ? "#3b82f6" : "#10b981"
-	);
+  const [title, setTitle] = useState("");
+  const [color, setColor] = useState(
+    type === "category" ? "#3b82f6" : "#10b981",
+  );
 
-	const handleSubmit = (e) => {
-		e.preventDefault();
-		if (title) {
-			onSubmit(title, color);
-			setTitle("");
-		}
-	};
+  // Credit Card Specific State
+  const [isCredit, setIsCredit] = useState(false);
+  const [dueDate, setDueDate] = useState("");
+  const [minPay, setMinPay] = useState(0);
+  const [interestRate, setInterestRate] = useState(0); // NEW: Interest Rate
 
-	return (
-		<form onSubmit={handleSubmit} className="flex items-end space-x-2 mb-4">
-			<div className="flex-1">
-				<label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
-					Title
-				</label>
-				<input
-					className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					placeholder={`New ${type}...`}
-					required
-				/>
-			</div>
-			<div>
-				<label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
-					Color
-				</label>
-				<input
-					type="color"
-					className="h-10 p-1 border rounded w-14 cursor-pointer"
-					value={color}
-					onChange={(e) => setColor(e.target.value)}
-				/>
-			</div>
-			<button
-				type="submit"
-				className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded h-10 transition shadow-sm"
-			>
-				Add
-			</button>
-		</form>
-	);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (title) {
+      onSubmit({
+        title,
+        color,
+        is_credit: type === "account" ? isCredit : false,
+        due_date:
+          type === "account" && isCredit && dueDate ? parseInt(dueDate) : null,
+        min_payment_percent:
+          type === "account" && isCredit ? parseFloat(minPay) : 0,
+        interest_rate:
+          type === "account" && isCredit ? parseFloat(interestRate) : 0, // NEW
+      });
+      // Reset Form
+      setTitle("");
+      setIsCredit(false);
+      setDueDate("");
+      setMinPay(0);
+      setInterestRate(0);
+    }
+  };
+
+  return (
+    <Box
+      as="form"
+      onSubmit={handleSubmit}
+      bg="gray.50"
+      p={4}
+      borderRadius="lg"
+      mb={6}
+    >
+      <Stack gap={4}>
+        {/* ROW 1: Title, Color, Add Button */}
+        <Flex gap={3} align="flex-end">
+          <Box flex={1}>
+            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={1}>
+              TITLE
+            </Text>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={`New ${type}...`}
+              bg="white"
+              required
+            />
+          </Box>
+          <Box>
+            <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={1}>
+              COLOR
+            </Text>
+            <Input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              p={1}
+              h="40px"
+              w="60px"
+              cursor="pointer"
+              bg="white"
+            />
+          </Box>
+          <Button type="submit" bg="blue.600" color="white" px={6}>
+            Add
+          </Button>
+        </Flex>
+
+        {/* ROW 2: Credit Card Options (Only for Accounts) */}
+        {type === "account" && (
+          <Stack gap={3}>
+            <Separator />
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isCredit}
+                onChange={(e) => setIsCredit(e.target.checked)}
+                className="rounded text-blue-600"
+              />
+              <Text fontSize="sm" fontWeight="medium">
+                Is this a Credit Card?
+              </Text>
+            </label>
+            {isCredit && (
+              <Flex gap={4}>
+                <Box w="80px">
+                  <Text fontSize="xs" fontWeight="bold" color="gray.500">
+                    Due Day
+                  </Text>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    bg="white"
+                    size="sm"
+                    placeholder="1-31"
+                  />
+                </Box>
+                <Box w="80px">
+                  <Text fontSize="xs" fontWeight="bold" color="gray.500">
+                    Min Pay %
+                  </Text>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={minPay}
+                    onChange={(e) => setMinPay(e.target.value)}
+                    bg="white"
+                    size="sm"
+                    placeholder="%"
+                  />
+                </Box>
+                <Box w="80px">
+                  <Text fontSize="xs" fontWeight="bold" color="gray.500">
+                    Int. Rate %
+                  </Text>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={interestRate}
+                    onChange={(e) => setInterestRate(e.target.value)}
+                    bg="white"
+                    size="sm"
+                    placeholder="3.5"
+                  />
+                </Box>
+              </Flex>
+            )}
+          </Stack>
+        )}
+      </Stack>
+    </Box>
+  );
+};
+
+// --- COMPONENT: Editable Item Row (With Safe Edit Logic) ---
+const EditableItem = ({ item, type, onEdit, onDelete }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempTitle, setTempTitle] = useState(item.title);
+  const [tempColor, setTempColor] = useState(item.color);
+
+  // Credit Edit States
+  const [tempDueDate, setTempDueDate] = useState(item.due_date || "");
+  const [tempMinPay, setTempMinPay] = useState(item.min_payment_percent || 0);
+  const [tempInterest, setTempInterest] = useState(item.interest_rate || 0); // NEW
+
+  const handleSave = () => {
+    onEdit(item.id, {
+      title: tempTitle,
+      color: tempColor,
+      // Only update credit details if it IS ALREADY a credit account
+      due_date: item.is_credit ? parseInt(tempDueDate) : null,
+      min_payment_percent: item.is_credit ? parseFloat(tempMinPay) : 0,
+      interest_rate: item.is_credit ? parseFloat(tempInterest) : 0,
+    });
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    // Reset to original values
+    setTempTitle(item.title);
+    setTempColor(item.color);
+    setTempDueDate(item.due_date || "");
+    setTempMinPay(item.min_payment_percent || 0);
+    setTempInterest(item.interest_rate || 0);
+    setIsEditing(false);
+  };
+
+  // --- VIEW: EDIT MODE ---
+  if (isEditing) {
+    return (
+      <Flex
+        direction="column"
+        gap={3}
+        p={3}
+        borderWidth="1px"
+        borderRadius="lg"
+        bg="blue.50"
+      >
+        <Flex gap={2}>
+          <Input
+            size="sm"
+            value={tempTitle}
+            onChange={(e) => setTempTitle(e.target.value)}
+            bg="white"
+          />
+          <Input
+            type="color"
+            size="sm"
+            w="50px"
+            p={0}
+            value={tempColor}
+            onChange={(e) => setTempColor(e.target.value)}
+            cursor="pointer"
+          />
+        </Flex>
+
+        {/* CREDIT CARD FIELDS (Visible ONLY if account is already Credit) */}
+        {/* We do NOT allow toggling 'is_credit' here to protect history */}
+        {type === "account" && item.is_credit && (
+          <Box borderTopWidth="1px" borderColor="blue.200" pt={2}>
+            <Text fontSize="xs" fontWeight="bold" color="blue.600" mb={2}>
+              CARD SETTINGS
+            </Text>
+            <Flex gap={2}>
+              <Box>
+                <Text fontSize="xx-small" color="gray.500" mb="1px">
+                  DUE DAY
+                </Text>
+                <Input
+                  size="xs"
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={tempDueDate}
+                  onChange={(e) => setTempDueDate(e.target.value)}
+                  bg="white"
+                />
+              </Box>
+              <Box>
+                <Text fontSize="xx-small" color="gray.500" mb="1px">
+                  MIN %
+                </Text>
+                <Input
+                  size="xs"
+                  type="number"
+                  step="0.1"
+                  value={tempMinPay}
+                  onChange={(e) => setTempMinPay(e.target.value)}
+                  bg="white"
+                />
+              </Box>
+              <Box>
+                <Text fontSize="xx-small" color="gray.500" mb="1px">
+                  INT %
+                </Text>
+                <Input
+                  size="xs"
+                  type="number"
+                  step="0.01"
+                  value={tempInterest}
+                  onChange={(e) => setTempInterest(e.target.value)}
+                  bg="white"
+                />
+              </Box>
+            </Flex>
+          </Box>
+        )}
+
+        <Flex justify="flex-end" gap={2}>
+          <IconButton
+            size="xs"
+            colorPalette="green"
+            onClick={handleSave}
+            variant="solid"
+          >
+            <IoCheckmarkOutline />
+          </IconButton>
+          <IconButton
+            size="xs"
+            colorPalette="gray"
+            onClick={handleCancel}
+            variant="ghost"
+          >
+            <IoCloseOutline />
+          </IconButton>
+        </Flex>
+      </Flex>
+    );
+  }
+
+  // --- VIEW: DISPLAY MODE ---
+  return (
+    <Flex
+      align="center"
+      justify="space-between"
+      p={3}
+      borderWidth="1px"
+      borderRadius="lg"
+      _hover={{ bg: "gray.50" }}
+    >
+      <Flex align="center" gap={3}>
+        <Box w={4} h={4} borderRadius="full" bg={item.color} shadow="sm" />
+        <Box>
+          <Text fontWeight="medium" color="gray.700">
+            {item.title}
+          </Text>
+          {type === "account" && item.is_credit && (
+            <Text fontSize="xs" color="gray.400">
+              Due: {item.due_date} | Min: {item.min_payment_percent}% |{" "}
+              <Text as="span" color="red.400">
+                Int: {item.interest_rate}%
+              </Text>
+            </Text>
+          )}
+        </Box>
+        {type === "account" && item.is_credit && (
+          <Badge size="xs" colorPalette="red" variant="subtle">
+            CREDIT
+          </Badge>
+        )}
+      </Flex>
+
+      <HStack gap={1}>
+        <IconButton
+          size="xs"
+          variant="ghost"
+          bg="blue.600"
+          color="white"
+          onClick={() => setIsEditing(true)}
+        >
+          <IoPencilOutline />
+        </IconButton>
+        {onDelete && (
+          <IconButton
+            size="xs"
+            variant="ghost"
+            colorPalette="red"
+            onClick={() => onDelete(item.id)}
+          >
+            <IoTrashOutline />
+          </IconButton>
+        )}
+      </HStack>
+    </Flex>
+  );
 };
 
 const Settings = () => {
-	const { categories, accounts, addCategory, addAccount } = useData();
-	const { session, signOut } = useAuth(); // Use your Auth context
+  const {
+    categories,
+    accounts,
+    addCategory,
+    addAccount,
+    editCategory,
+    editAccount,
+    deleteCategory,
+    deleteAccount,
+  } = useData();
 
-	// Profile State
-	const [loading, setLoading] = useState(true);
-	const [username, setUsername] = useState("");
-	const [website, setWebsite] = useState("");
+  const { session, signOut } = useAuth();
 
-	// Load Profile Data
-	useEffect(() => {
-		let ignore = false;
-		async function getProfile() {
-			if (!session?.user) return;
-			setLoading(true);
-			const { data, error } = await supabase
-				.from("profiles")
-				.select(`username, website`)
-				.eq("id", session.user.id)
-				.single();
+  // Profile State
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [username, setUsername] = useState("");
+  const [website, setWebsite] = useState("");
 
-			if (!ignore) {
-				if (error) console.warn(error);
-				else if (data) {
-					setUsername(data.username || "");
-					setWebsite(data.website || "");
-				}
-			}
-			setLoading(false);
-		}
+  // Load Profile Data
+  useEffect(() => {
+    if (session?.user) {
+      const meta = session.user.user_metadata || {};
+      const newName = meta.username || meta.full_name || "";
+      const newWeb = meta.website || "";
 
-		getProfile();
-		return () => {
-			ignore = true;
-		};
-	}, [session]);
+      // 1. Guard Clause: Only set state if it is different to prevent loops
+      if (username !== newName) setUsername(newName);
+      if (website !== newWeb) setWebsite(newWeb);
 
-	// Update Profile Logic
-	async function updateProfile(e) {
-		e.preventDefault();
-		setLoading(true);
-		const updates = {
-			id: session.user.id,
-			username,
-			website,
-			updated_at: new Date(),
-		};
+      setProfileLoading(false);
+    }
+    // 2. Dependency Change: Track the ID (string), not the whole object
+    // We also disable the exhaustive-deps rule for 'username'/'website'
+    // because we only want this to run when the USER changes, not when you type.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
 
-		const { error } = await supabase.from("profiles").upsert(updates);
-		if (error) alert(error.message);
-		else alert("Profile updated successfully!");
-		setLoading(false);
-	}
+  async function updateProfile(e) {
+    e.preventDefault();
+    setProfileLoading(true);
 
-	return (
-		<div className="container mx-auto p-6">
-			<h1 className="text-3xl font-bold text-gray-800 mb-8">System Settings</h1>
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        username: username,
+        website: website,
+      },
+    });
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-				{/* --- 1. USER PROFILE SECTION --- */}
-				<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-					<h2 className="text-xl font-bold mb-6 flex items-center">
-						<span className="bg-blue-100 text-blue-600 p-2 rounded-lg mr-3 text-sm">
-							👤
-						</span>
-						User Profile
-					</h2>
-					<form onSubmit={updateProfile} className="space-y-4">
-						<div>
-							<label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
-								Email
-							</label>
-							<input
-								className="w-full border p-2 rounded bg-gray-50 text-gray-500 cursor-not-allowed"
-								type="text"
-								value={session?.user?.email}
-								disabled
-							/>
-						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
-								Display Name
-							</label>
-							<input
-								className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-								type="text"
-								value={username}
-								onChange={(e) => setUsername(e.target.value)}
-							/>
-						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
-								Website
-							</label>
-							<input
-								className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-								type="url"
-								value={website}
-								onChange={(e) => setWebsite(e.target.value)}
-							/>
-						</div>
-						<div className="pt-4 space-y-2">
-							<button
-								className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition"
-								type="submit"
-								disabled={loading}
-							>
-								{loading ? "Saving..." : "Update Profile"}
-							</button>
-							<button
-								onClick={signOut}
-								className="w-full bg-white border border-red-200 text-red-600 hover:bg-red-50 py-2 rounded-lg transition"
-								type="button"
-							>
-								Sign Out
-							</button>
-						</div>
-					</form>
-				</div>
+    if (error) {
+      alert("Error updating profile: " + error.message);
+    } else {
+      alert("Profile updated successfully!");
+    }
+    setProfileLoading(false);
+  }
 
-				{/* --- 2. CATEGORIES SECTION --- */}
-				<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-					<h2 className="text-xl font-bold mb-6 flex items-center">
-						<span className="bg-purple-100 text-purple-600 p-2 rounded-lg mr-3 text-sm">
-							🏷️
-						</span>
-						Categories
-					</h2>
-					<SettingsForm type="category" onSubmit={addCategory} />
-					<div className="max-h-64 overflow-y-auto space-y-2 pr-2">
-						{categories.map((cat) => (
-							<div
-								key={cat.id}
-								className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition"
-							>
-								<div className="flex items-center space-x-3">
-									<div
-										className="w-4 h-4 rounded-full shadow-inner"
-										style={{ backgroundColor: cat.color }}
-									></div>
-									<span className="font-medium text-gray-700">{cat.title}</span>
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
+  return (
+    <Container maxW="1200px" py={8}>
+      <Heading as="h1" size="2xl" mb={8} color="gray.800">
+        System Settings
+      </Heading>
 
-				{/* --- 3. ACCOUNTS SECTION --- */}
-				<div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-					<h2 className="text-xl font-bold mb-6 flex items-center">
-						<span className="bg-green-100 text-green-600 p-2 rounded-lg mr-3 text-sm">
-							💳
-						</span>
-						Accounts
-					</h2>
-					<SettingsForm type="account" onSubmit={addAccount} />
-					<div className="max-h-64 overflow-y-auto space-y-2 pr-2">
-						{accounts.map((acc) => (
-							<div
-								key={acc.id}
-								className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition"
-							>
-								<div className="flex items-center space-x-3">
-									<div
-										className="w-4 h-4 rounded-full shadow-inner"
-										style={{ backgroundColor: acc.color }}
-									></div>
-									<span className="font-medium text-gray-700">{acc.title}</span>
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
-			</div>
-		</div>
-	);
+      <SimpleGrid columns={{ base: 1, lg: 3 }} gap={8}>
+        {/* PROFILE SECTION */}
+        <Box
+          bg="white"
+          p={6}
+          borderRadius="xl"
+          shadow="sm"
+          borderWidth="1px"
+          borderColor="gray.100"
+        >
+          <Flex align="center" mb={6} gap={3}>
+            <Box bg="blue.50" color="blue.600" p={2} borderRadius="lg">
+              👤
+            </Box>
+            <Heading size="md">User Profile</Heading>
+          </Flex>
+          <Stack as="form" onSubmit={updateProfile} gap={4}>
+            <Box>
+              <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={1}>
+                DISPLAY NAME
+              </Text>
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </Box>
+            <Box>
+              <Text fontSize="xs" fontWeight="bold" color="gray.500" mb={1}>
+                WEBSITE
+              </Text>
+              <Input
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
+            </Box>
+            <Stack pt={4} gap={3}>
+              <Button
+                type="submit"
+                bg="blue.600"
+                color="white"
+                width="full"
+                loading={profileLoading}
+              >
+                Update Profile
+              </Button>
+              <Button
+                type="button"
+                onClick={signOut}
+                variant="outline"
+                colorPalette="red"
+                width="full"
+              >
+                Sign Out
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+
+        {/* CATEGORIES SECTION */}
+        <Box
+          bg="white"
+          p={6}
+          borderRadius="xl"
+          shadow="sm"
+          borderWidth="1px"
+          borderColor="gray.100"
+        >
+          <Flex align="center" mb={6} gap={3}>
+            <Box bg="purple.50" color="purple.600" p={2} borderRadius="lg">
+              🏷️
+            </Box>
+            <Heading size="md">Categories</Heading>
+          </Flex>
+          <SettingsForm type="category" onSubmit={addCategory} />
+          <Stack maxH="300px" overflowY="auto" gap={2} pr={2}>
+            {categories.map((cat) => (
+              <EditableItem
+                key={cat.id}
+                item={cat}
+                type="category"
+                onEdit={editCategory}
+                onDelete={deleteCategory}
+              />
+            ))}
+          </Stack>
+        </Box>
+
+        {/* ACCOUNTS SECTION */}
+        <Box
+          bg="white"
+          p={6}
+          borderRadius="xl"
+          shadow="sm"
+          borderWidth="1px"
+          borderColor="gray.100"
+        >
+          <Flex align="center" mb={6} gap={3}>
+            <Box bg="green.50" color="green.600" p={2} borderRadius="lg">
+              💳
+            </Box>
+            <Heading size="md">Accounts</Heading>
+          </Flex>
+          <SettingsForm type="account" onSubmit={addAccount} />
+          <Stack maxH="300px" overflowY="auto" gap={2} pr={2}>
+            {accounts.map((acc) => (
+              <EditableItem
+                key={acc.id}
+                item={acc}
+                type="account"
+                onEdit={editAccount}
+                onDelete={deleteAccount}
+              />
+            ))}
+          </Stack>
+        </Box>
+      </SimpleGrid>
+    </Container>
+  );
 };
 
 export default Settings;

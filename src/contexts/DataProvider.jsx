@@ -1,193 +1,221 @@
+// src/contexts/DataProvider.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
-import { DataContext } from "./DataContext";
 import { useAuth } from "./AuthContext";
+import { DataContext } from "./DataContext"; // <--- IMPORT FROM STEP 1
 
+// We export ONLY the component here to satisfy Fast Refresh
 export const DataProvider = ({ children }) => {
-	const { session } = useAuth();
-	const [loading, setLoading] = useState(true);
-	const [transactions, setTransactions] = useState([]);
-	const [categories, setCategories] = useState([]);
-	const [accounts, setAccounts] = useState([]);
-	const [currentResetId, setCurrentResetId] = useState(null);
-	const [accountTotals, setAccountTotals] = useState({});
+  const { session } = useAuth();
 
-	// --- 1. CORE FETCHING LOGIC ---
+  const [resets, setResets] = useState([]);
+  const [currentResetId, setCurrentResetId] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [accountTotals, setAccountTotals] = useState({});
+  const [loading, setLoading] = useState(true);
 
-	const fetchTransactions = useCallback(async (resetId) => {
-		setLoading(true);
-		const { data, error } = await supabase
-			.from("transactions")
-			.select(
-				`
+  // --- FETCH METADATA ---
+  const fetchMetaData = useCallback(async () => {
+    try {
+      const { data: catData } = await supabase
+        .from("categories")
+        .select("*")
+        .order("title");
+      if (catData) setCategories(catData);
+
+      const { data: accData } = await supabase
+        .from("accounts")
+        .select("*")
+        .order("title");
+      if (accData) setAccounts(accData);
+
+      const { data: resetData, error } = await supabase
+        .from("resets")
+        .select("*")
+        .order("reset_date", { ascending: false });
+
+      if (error) throw error;
+      setResets(resetData || []);
+
+      if (resetData && resetData.length > 0 && !currentResetId) {
+        setCurrentResetId(resetData[0].id);
+      }
+    } catch (error) {
+      console.error("Error loading metadata:", error.message);
+    }
+  }, [currentResetId]);
+
+  // --- FETCH TRANSACTIONS ---
+  const fetchTransactions = useCallback(async (resetId) => {
+    if (!resetId) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("transactions")
+      .select(
+        `
         *,
-        categories (title, color),
-        neg_acc:negative_account_id (title, color),
-        pos_acc:positive_account_id (title, color)
-      `
-			)
-			.eq("reset_id", resetId)
-			.order("date", { ascending: false })
-			.order("created_at", { ascending: false });
+        categories (id, title, color),
+        neg_acc:negative_account_id (id, title, color, is_credit),
+        pos_acc:positive_account_id (id, title, color, is_credit)
+      `,
+      )
+      .eq("reset_id", resetId)
+      .order("date", { ascending: false });
 
-		if (!error && data) setTransactions(data);
-		setLoading(false);
-	}, []);
+    if (error) console.error("Error fetching transactions:", error.message);
+    else setTransactions(data || []);
+    setLoading(false);
+  }, []);
 
-	const fetchMetaData = useCallback(async () => {
-		if (!session) return;
-		setLoading(true);
-		try {
-			const [catRes, accRes, resetRes] = await Promise.all([
-				supabase.from("categories").select("*").order("title"),
-				supabase.from("accounts").select("*").order("title"),
-				supabase
-					.from("resets")
-					.select("*")
-					.order("reset_date", { ascending: false })
-					.limit(1),
-			]);
+  // --- CALCULATE TOTALS ---
+  const calculateTotals = useCallback(() => {
+    const totals = {};
+    accounts.forEach((acc) => {
+      totals[acc.id] = 0;
+    });
+    transactions.forEach((tx) => {
+      const price = Number(tx.price) || 0;
+      const fee = Number(tx.service_fee) || 0;
+      if (
+        tx.negative_account_id &&
+        Object.hasOwn(totals, tx.negative_account_id)
+      ) {
+        const acc = accounts.find((a) => a.id === tx.negative_account_id);
+        if (acc?.is_credit) totals[tx.negative_account_id] += price + fee;
+        else totals[tx.negative_account_id] -= price + fee;
+      }
+      if (
+        tx.positive_account_id &&
+        Object.hasOwn(totals, tx.positive_account_id)
+      ) {
+        const acc = accounts.find((a) => a.id === tx.positive_account_id);
+        if (acc?.is_credit) totals[tx.positive_account_id] -= price;
+        else totals[tx.positive_account_id] += price;
+      }
+    });
+    setAccountTotals(totals);
+  }, [transactions, accounts]);
 
-			if (catRes.data) setCategories(catRes.data);
-			if (accRes.data) setAccounts(accRes.data);
+  // --- CRUD OPERATIONS ---
+  const addCategory = async (data) => {
+    await supabase.from("categories").insert([data]);
+    await fetchMetaData();
+  };
+  const addAccount = async (data) => {
+    await supabase.from("accounts").insert([data]);
+    await fetchMetaData();
+  };
+  const editCategory = async (id, data) => {
+    await supabase.from("categories").update(data).eq("id", id);
+    await fetchMetaData();
+  };
+  const editAccount = async (id, data) => {
+    await supabase.from("accounts").update(data).eq("id", id);
+    await fetchMetaData();
+  };
+  const deleteCategory = async (id) => {
+    await supabase.from("categories").delete().eq("id", id);
+    await fetchMetaData();
+  };
+  const deleteAccount = async (id) => {
+    await supabase.from("accounts").delete().eq("id", id);
+    await fetchMetaData();
+  };
 
-			if (resetRes.data && resetRes.data.length > 0) {
-				setCurrentResetId(resetRes.data[0].id);
-			}
-		} catch (error) {
-			console.error("UDIT Fetch Error:", error);
-		} finally {
-			setLoading(false);
-		}
-	}, [session]);
+  const addTransaction = async (txData) => {
+    if (!currentResetId) return false;
+    const { error } = await supabase
+      .from("transactions")
+      .insert([{ ...txData, reset_id: currentResetId }]);
+    if (error) {
+      alert(error.message);
+      return false;
+    }
+    await fetchTransactions(currentResetId);
+    return true;
+  };
+  const editTransaction = async (id, data) => {
+    const { error } = await supabase
+      .from("transactions")
+      .update(data)
+      .eq("id", id);
+    if (error) {
+      alert(error.message);
+      return false;
+    }
+    await fetchTransactions(currentResetId);
+    return true;
+  };
+  const deleteTransaction = async (id) => {
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (error) {
+      alert(error.message);
+      return false;
+    }
+    await fetchTransactions(currentResetId);
+    return true;
+  };
 
-	// --- 2. THE MATH (The "UDIT" Process) ---
+  const performReset = async () => {
+    if (!session?.user) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("resets")
+      .insert([
+        { reset_date: new Date().toISOString(), user_id: session.user.id },
+      ])
+      .select()
+      .single();
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+      return;
+    }
+    await fetchMetaData();
+    setCurrentResetId(data.id);
+    setLoading(false);
+  };
 
-	const calculateTotals = useCallback(() => {
-		const totals = {};
-		// Initialize all accounts to ₱0.00
-		accounts.forEach((acc) => {
-			totals[acc.id] = 0;
-		});
+  const switchReset = (id) => setCurrentResetId(id);
 
-		transactions.forEach((tx) => {
-			const price = Number(tx.price) || 0;
-			const fee = Number(tx.service_fee) || 0;
+  // --- EFFECTS ---
+  useEffect(() => {
+    if (session) fetchMetaData();
+  }, [session, fetchMetaData]);
+  useEffect(() => {
+    if (currentResetId) fetchTransactions(currentResetId);
+  }, [currentResetId, fetchTransactions]);
+  useEffect(() => {
+    calculateTotals();
+  }, [transactions, accounts, calculateTotals]);
 
-			// 1. Handle Positive Account (Add)
-			if (
-				tx.positive_account_id &&
-				Object.hasOwn(totals, tx.positive_account_id)
-			) {
-				totals[tx.positive_account_id] += price;
-			}
-
-			// 2. Handle Negative Account (Subtract price + fee)
-			if (
-				tx.positive_account_id &&
-				Object.hasOwn(totals, tx.negative_account_id)
-			) {
-				totals[tx.negative_account_id] -= price + fee;
-			}
-		});
-		setAccountTotals(totals);
-	}, [transactions, accounts]);
-
-	// --- 3. AUTO-RUN EFFECTS ---
-
-	useEffect(() => {
-		if (!session) {
-			setLoading(false); // Stop the spinner if there's no user
-			return;
-		}
-		fetchMetaData();
-	}, [session, fetchMetaData]);
-
-	useEffect(() => {
-		let isSubscribed = true;
-
-		if (isSubscribed) {
-			fetchMetaData();
-		}
-
-		return () => {
-			isSubscribed = false;
-		};
-	}, [fetchMetaData]);
-
-	useEffect(() => {
-		if (currentResetId) {
-			fetchTransactions(currentResetId);
-		}
-	}, [currentResetId, fetchTransactions]);
-
-	useEffect(() => {
-		calculateTotals();
-	}, [calculateTotals]);
-
-	// --- 4. EXPORTED ACTIONS ---
-
-	const addTransaction = async (newTx) => {
-		if (!currentResetId || !session) {
-			alert("No active Reset ID found. Please create a reset in the database.");
-			return false;
-		}
-
-		const { data, error } = await supabase
-			.from("transactions")
-			.insert([
-				{ ...newTx, reset_id: currentResetId, user_id: session.user.id },
-			])
-			.select();
-
-		if (!error && data) {
-			await fetchTransactions(currentResetId);
-			return true;
-		}
-		console.error("Supabase Error:", error);
-		return false;
-	};
-
-	const performReset = async () => {
-		const confirmMsg =
-			"Ready for a new UDIT? This will archive current transactions and clear your dashboard.";
-		if (!window.confirm(confirmMsg)) return;
-
-		const { data, error } = await supabase
-			.from("resets")
-			.insert([{ user_id: session.user.id }]) // Link reset to user
-			.select();
-
-		if (!error && data?.[0]) {
-			setCurrentResetId(data[0].id);
-		}
-	};
-
-	const addCategory = async (title, color) => {
-		const { error } = await supabase
-			.from("categories")
-			.insert([{ title, color }]);
-		if (!error) fetchMetaData();
-	};
-
-	const addAccount = async (title, color) => {
-		const { error } = await supabase
-			.from("accounts")
-			.insert([{ title, color }]);
-		if (!error) fetchMetaData();
-	};
-
-	const value = {
-		loading,
-		transactions,
-		categories,
-		accounts,
-		accountTotals,
-		addTransaction,
-		performReset,
-		addCategory,
-		addAccount,
-	};
-
-	return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+  // Use the Provider from the imported context
+  return (
+    <DataContext.Provider
+      value={{
+        resets,
+        currentResetId,
+        switchReset,
+        performReset,
+        categories,
+        accounts,
+        transactions,
+        accountTotals,
+        loading,
+        addCategory,
+        editCategory,
+        deleteCategory,
+        addAccount,
+        editAccount,
+        deleteAccount,
+        addTransaction,
+        editTransaction,
+        deleteTransaction,
+      }}
+    >
+      {children}
+    </DataContext.Provider>
+  );
 };
